@@ -1,7 +1,7 @@
 ---
 layout: default
 title: "First Lesson: Partition vs Broadcast"
-date: 2025-07-01
+date: 2025-06-13
 ---
 
 ## First Lesson: Partition vs Broadcast
