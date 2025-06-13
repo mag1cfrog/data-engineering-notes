@@ -1,101 +1,76 @@
-title: "Spark Tuning Notes"
-description: "Reflective lessons learned tuning Apache Spark"
-baseurl: "/spark-tuning-notes"
+# Site settings
+lang: en
+title: Spark Tuning Notes
+tagline: Reflective lessons learned tuning Apache Spark
+description: >-
+  A collection of practical lessons learned while optimizing Apache Spark jobs,
+  covering real-world performance challenges and their solutions.
+
 url: "https://mag1cfrog.github.io"
+baseurl: "/spark-tuning-notes"
 
 # Theme
-theme: minimal-mistakes-jekyll
+theme: jekyll-theme-chirpy
+
+# Social
+github:
+  username: mag1cfrog
+
+social:
+  name: Hanbo Wang
+  email: your-email@example.com
+  links:
+    - https://github.com/mag1cfrog
 
 # Site Author
 author:
-  name: "Hanbo Wang"
-  bio: "Software Engineer specializing in Apache Spark optimization"
-  location: "Your Location"
-  email: "your-email@example.com"
-  links:
-    - label: "GitHub"
-      icon: "fab fa-fw fa-github"
-      url: "https://github.com/mag1cfrog"
+  name: Hanbo Wang
+  twitter: # your twitter username (optional)
+  github: mag1cfrog
+  bio: Software Engineer specializing in Apache Spark optimization
+
+# Build settings
+timezone: America/Los_Angeles
+
+paginate: 10
+paginate_path: "/posts/page:num/"
 
 # Plugins
 plugins:
+  - jekyll-paginate
+  - jekyll-redirect-from
   - jekyll-feed
-  - jekyll-seo-tag
+  - jekyll-archives
   - jekyll-sitemap
   - jekyll-include-cache
 
-# Reading Files
-include:
-  - .htaccess
-  - _pages
-exclude:
-  - "*.sublime-project"
-  - "*.sublime-workspace"
-  - vendor
-  - .asset-cache
-  - .bundle
-  - .jekyll-assets-cache
-  - .sass-cache
-  - assets/js/plugins
-  - assets/js/_main.js
-  - assets/js/vendor
-  - Capfile
-  - CHANGELOG
-  - config
-  - Gemfile
-  - Gruntfile.js
-  - gulpfile.js
-  - LICENSE
-  - log
-  - node_modules
-  - package.json
-  - package-lock.json
-  - Rakefile
-  - README
-  - tmp
-keep_files:
-  - .git
-  - .svn
-encoding: "utf-8"
-markdown_ext: "markdown,mkdown,mkdn,mkd,md"
-
-# Conversion
-markdown: kramdown
-highlighter: rouge
-lsi: false
-excerpt_separator: "\n\n"
-incremental: false
-
-# Markdown Processing
-kramdown:
-  input: GFM
-  hard_wrap: false
-  auto_ids: true
-  footnote_nr: 1
-  entity_output: as_char
-  toc_levels: 1..6
-  smart_quotes: lsquo,rsquo,ldquo,rdquo
-  enable_coderay: false
+# Archives
+jekyll-archives:
+  enabled: [categories, tags]
+  layouts:
+    category: category
+    tag: tag
+  permalinks:
+    category: /categories/:name/
+    tag: /tags/:name/
 
 # Defaults
 defaults:
-  # _posts
   - scope:
       path: ""
       type: posts
     values:
-      layout: single
-      author_profile: true
-      read_time: true
+      layout: post
       comments: false
-      share: true
-      related: true
-      sidebar:
-        nav: "main"
-  # _pages
+      toc: true
+      permalink: /posts/:title/
+  - scope:
+      path: _drafts
+    values:
+      comments: false
   - scope:
       path: ""
-      type: pages
+      type: tabs
     values:
-      layout: single
-      author_profile: true
+      layout: page
+      permalink: /:title/
