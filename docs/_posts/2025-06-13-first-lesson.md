@@ -9,6 +9,7 @@ tags:
   - partitioning
   - performance
 excerpt: "How switching from partitioned joins to broadcast joins reduced shuffle writes from 8GB to 500MB"
+layout: single
 ---
 
 ## First Lesson: Partition vs Broadcast
