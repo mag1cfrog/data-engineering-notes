@@ -44,6 +44,8 @@ plugins:
   - jekyll-sitemap
   - jekyll-include-cache
 
+future: true
+
 # Archives
 jekyll-archives:
   enabled: [categories, tags]

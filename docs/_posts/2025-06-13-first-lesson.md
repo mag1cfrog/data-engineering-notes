@@ -1,6 +1,6 @@
 ---
 title: "First Lesson: Partition vs Broadcast"
-date: 2025-06-13
+date: 2025-06-13 12:00:00 -0800
 categories:
   - spark
   - optimization
