@@ -32,6 +32,8 @@ author:
 # Build settings
 timezone: America/Los_Angeles
 
+avatar: "/assets/img/avatar.png"
+
 paginate: 10
 paginate_path: "/posts/page:num/"
 
