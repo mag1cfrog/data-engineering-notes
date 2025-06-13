@@ -1,13 +1,11 @@
 source "https://rubygems.org"
 
-gem "jekyll", "~> 4.4" # Or the version compatible with GitHub Pages if you know it
-gem "minima", "~> 2.5" # The theme specified in _config.yml
+gem "jekyll", "~> 4.4"
+gem "minimal-mistakes-jekyll", "~> 4.24"
 
-# Add other Jekyll plugins you might use here, for example:
-# gem "jekyll-feed", "~> 0.12"
-# gem "jekyll-seo-tag", "~> 2.7"
-
-# If you're using GitHub Pages, it's often useful to include the github-pages gem
-# group :jekyll_plugins do
-#   gem "github-pages", group: :jekyll_plugins
-# end
+group :jekyll_plugins do
+  gem "jekyll-feed", "~> 0.12"
+  gem "jekyll-seo-tag", "~> 2.7"
+  gem "jekyll-sitemap", "~> 1.4"
+  gem "jekyll-include-cache", "~> 0.2"
+end
