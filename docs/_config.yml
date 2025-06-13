@@ -1,0 +1,5 @@
+title: "Spark Tuning Notes"
+description: "Reflective lessons learned tuning Apache Spark"
+baseurl: "/spark-tuning-notes"
+url: "https://<username>.github.io"
+theme: minima
