@@ -5,19 +5,34 @@ categories:
   - spark
   - optimization
 tags:
-  - broadcast
-  - partitioning
   - performance
 excerpt: "How switching from partitioned joins to broadcast joins reduced shuffle writes from 8GB to 500MB"
 ---
 
-## First Lesson: Partition vs Broadcast
 
-When joining a large 10 GB DataFrame with a small 200 MB lookup table, I discovered that:
 
-- Using a **broadcast join** with `spark.conf.set("spark.sql.autoBroadcastJoinThreshold", "300MB")` dropped shuffle write from 8 GB to 500 MB.
-- Conversely, relying on default partitioned joins caused redundant shuffles across executors.
+We have a Spark job on Databricks that would join a enormous table (player tracking records of coordindates on frames) with a dimensional table (position number to player uid mapping), and then do some de-dup using window function.
 
-<aside class="callout">
-💡 **Tip:** Always tune `spark.sql.shuffle.partitions = executors * cores_per_executor` after switching join strategies.
-</aside>
+## The Deduplication Challenge
+
+The core logic involved a window function to handle duplicate records (some psedudo SQL):
+
+```sql
+WITH ranked AS (
+  SELECT 
+    tracking.*,
+    lineup.fielder_id,
+    lineup.position_alpha,
+    ROW_NUMBER() OVER (
+      PARTITION BY game_id, pitch_uid, position_num, event_time
+      ORDER BY processed_year DESC, processed_month DESC, processed_day DESC
+    ) AS rn
+  FROM hawkeye_tracking tracking
+  JOIN hawkeye_lineup lineup ON (...)
+)
+SELECT * EXCEPT (rn)
+FROM ranked 
+WHERE rn = 1
+```
+
+
