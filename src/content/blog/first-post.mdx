@@ -10,13 +10,16 @@ draft: true
 import { Image } from 'astro:assets';
 import queryProfile1 from '../../assets/img/dbx_query_profile_1.jpg';
 import queryProfile2 from '../../assets/img/dbx_query_profile_2.jpg';
+import topOperators from '../../assets/img/dbx_query_top_operators.jpg';
+import operation11 from '../../assets/img/dbx_query_operation_11.jpg';
+import dagView from '../../assets/img/dbx_query_dag_view.jpg';
 
-## Intro
+### Intro
 
 I work for an MLB team, and we process massive amounts of baseball tracking data every day. Recently, we had a Spark job on Databricks that needed to join an enormous table (player tracking records with coordinates for each frame) with a dimensional table (position number to player uid mapping), then perform deduplication using a window function.
 
 
-### The Deduplication Challenge
+##### The Deduplication Challenge
 
 The core logic involved a window function to handle duplicate records (some psedudo SQL):
 
@@ -40,7 +43,7 @@ WHERE rn = 1
 
 Although the query itself doesn't look complex, the long execution time of it raised some concerns. With the table sized at only a couple hundreds of GBs, why would it take over 30 mins to run on Databricks, even with a medium-sized SQL warehouse? Something's clearly wrong here, so I dove into DBX's query profile to investigate.
 
-## Query Profile Analysis
+### Query Profile Analysis
 
 Looking at the query profile, I immediately spotted the issue:
 
@@ -50,18 +53,63 @@ Looking at the query profile, I immediately spotted the issue:
     alt="Databricks query profile showing I/O metrics and 33+ execution time" 
     width={500} 
     height={300}
-    style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;"
+    style="width: 100%; height: 100%; object-fit: contain; border-radius: 2px;"
   />
   <Image 
     src={queryProfile2} 
     alt="Databricks query profile showing massive spill" 
     width={500} 
     height={400}
-    style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;"
+    style="width: 100%; height: 100%; object-fit: contain; border-radius: 2px;"
   />
 </div>
 
-### The Real Problem: Massive Disk Spilling
+#### The Real Problem: Massive Disk Spilling
 
 **391.87 GB of disk spilling**
 This was the biggest red flag. The query spilled nearly 400GB to disk, which is almost 3x the amount of data actually read (146.66 GB). This indicates that Spark couldn't fit the intermediate results in memory and had to write them to disk repeatedly - a huge performance killer.
+
+#### Digging Deeper: Top Operators Analysis
+
+To understand what was causing this massive spilling, I clicked into the "Top operators" view:
+
+<Image 
+  src={topOperators} 
+  alt="Databricks top operators showing shuffle operations consuming most time" 
+  width={400} 
+  height={400}
+  style="width: 60%; object-fit: contain; border-radius: 8px; margin: 2rem 0;"
+/>
+
+The analysis revealed: 
+- **Shuffle operations** consumed 47.8% of the total time (1.05 hours)
+- **Sort operations** took 34.6% of the time (56.27 minutes)
+- The window function was clearly the bottleneck
+
+#### Root cause: Window Function Sorting
+
+Clicking into Sort operation #11, I found the smoking gun:
+<Image 
+  src={operation11} 
+  alt="Sort operation details showing exact ORDER BY columns from window function" 
+  width={600} 
+  height={500}
+  style="width: 65%; object-fit: contain; border-radius: 8px; margin: 2rem 0;"
+/>
+
+**90.37 GB spilled to disk** from this single sort operation! Looking at the sort order, it was exactly the ORDER BY clause from our ROW_NUMBER() window function:
+- `src.game_id ASC NULLS FIRST`
+- `src.pitch_uid ASC NULLS FIRST` 
+- `src.position_num ASC NULLS FIRST`
+- `src.event_time ASC NULLS FIRST`
+- `src.processed_year DESC NULLS LAST`
+- `src.processed_month DESC NULLS LAST`
+- `src.processed_day DESC NULLS LAST`
+
+This confirms that our window function's `ROW_NUMBER() OVER (PARTITION BY ... ORDER BY ...)` was forcing Spark to:
+
+1. **Shuffle all data** by the partition keys
+2. **Sort massive partitions** by the ORDER BY clause
+3. **Spill to disk** when the sorted data exceeded memory
+
+The combination of a large dataset with complex partitioning and sorting was overwhelming Spark's memory management, causing the performance disaster we observed.
