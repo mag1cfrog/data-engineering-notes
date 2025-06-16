@@ -1,5 +1,99 @@
-title: "Spark Tuning Notes"
-description: "Reflective lessons learned tuning Apache Spark"
-baseurl: "/spark-tuning-notes"
+# Site settings
+lang: en
+title: Spark Tuning Notes
+tagline: Reflective lessons learned tuning Apache Spark
+description: >-
+  A collection of practical lessons learned while optimizing Apache Spark jobs,
+  covering real-world performance challenges and their solutions.
+
 url: "https://mag1cfrog.github.io"
-theme: minima
+baseurl: "/spark-tuning-notes"
+
+# Theme
+theme: jekyll-theme-chirpy
+
+# Social
+github:
+  username: mag1cfrog
+
+social:
+  name: Hanbo Wang
+  email: harrywong2017@gmail.com
+  links:
+    - https://github.com/mag1cfrog
+
+# Site Author
+author:
+  name: Hanbo Wang
+
+  github: mag1cfrog
+  bio: Data Engineer specializing in Apache Spark optimization
+
+# Build settings
+timezone: America/Los_Angeles
+
+avatar: "/assets/img/avatar.png"
+
+paginate: 10
+paginate_path: "/posts/page:num/"
+
+# Plugins
+plugins:
+  - jekyll-paginate
+  - jekyll-redirect-from
+  - jekyll-archives
+  - jekyll-sitemap
+  - jekyll-include-cache
+
+# Exclude from processing.
+# The following items will not be processed, by default.
+# Any item listed under the `exclude:` key here will be automatically added to
+# the internal list.
+#
+# Excluded items can be processed by explicitly listing the directories or
+# their entries' file path in the `include:` list.
+#
+exclude:
+  - .sass-cache/
+  - .jekyll-cache/
+  - gemfiles/
+  - Gemfile
+  - Gemfile.lock
+  - node_modules/
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/
+
+future: true
+
+# Archives
+jekyll-archives:
+  enabled: [categories, tags]
+  layouts:
+    category: category
+    tag: tag
+  permalinks:
+    category: /categories/:name/
+    tag: /tags/:name/
+
+# Defaults
+defaults:
+  - scope:
+      path: ""
+      type: posts
+    values:
+      layout: post
+      comments: false
+      toc: true
+      permalink: /posts/:title/
+  - scope:
+      path: _drafts
+    values:
+      comments: false
+  - scope:
+      path: ""
+      type: tabs
+    values:
+      layout: page
+      permalink: /:title/
