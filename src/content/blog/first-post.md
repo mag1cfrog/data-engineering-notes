@@ -8,11 +8,12 @@ description: "How switching from partitioned joins to broadcast joins reduced sh
 draft: true
 ---
 
+## Intro
+
+I work for an MLB team, and we process massive amounts of baseball tracking data every day. Recently, we had a Spark job on Databricks that needed to join an enormous table (player tracking records with coordinates for each frame) with a dimensional table (position number to player uid mapping), then perform deduplication using a window function.
 
 
-We have a Spark job on Databricks that would join a enormous table (player tracking records of coordindates on frames) with a dimensional table (position number to player uid mapping), and then do some de-dup using window function.
-
-## The Deduplication Challenge
+### The Deduplication Challenge
 
 The core logic involved a window function to handle duplicate records (some psedudo SQL):
 
