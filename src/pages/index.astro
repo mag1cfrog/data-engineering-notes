@@ -1,0 +1,26 @@
+---
+import BaseHead from '../components/BaseHead.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import { SITE_TITLE, SITE_DESCRIPTION } from '../consts';
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<BaseHead title={SITE_TITLE} description={SITE_DESCRIPTION} />
+	</head>
+	<body>
+		<Header />
+		<main>
+			<h1>Welcome, I'm Hanbo Wang</h1>
+            <p>
+                This is my personal space for sharing notes and reflections on Spark job optimization and data engineering. Here you'll find practical lessons, experiments, and insights from my hands-on work.
+            </p>
+            <p>
+                Feel free to browse my <a href="/blog">blog posts</a> for detailed write-ups on Spark tuning, performance troubleshooting, and more.
+            </p>
+		</main>
+		<Footer />
+	</body>
+</html>

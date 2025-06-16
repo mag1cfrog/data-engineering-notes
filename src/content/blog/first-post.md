@@ -1,12 +1,11 @@
 ---
 title: "First Lesson: Partition vs Broadcast"
-date: 2025-06-13 12:00:00 -0800
-categories:
+pubDate: 2025-06-13T12:00:00-08:00
+tags:
   - spark
   - optimization
-tags:
-  - performance
-excerpt: "How switching from partitioned joins to broadcast joins reduced shuffle writes from 8GB to 500MB"
+description: "How switching from partitioned joins to broadcast joins reduced shuffle writes from 8GB to 500MB"
+draft: true
 ---
 
 
