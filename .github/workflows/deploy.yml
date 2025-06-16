@@ -1,0 +1,31 @@
+name: Deploy Astro to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]           # or your default branch
+  workflow_dispatch:             # allow manual runs
+
+permissions:
+  contents: read                 # for checkout
+  pages: write                   # to publish
+  id-token: write                # for OIDC
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Fetch your code
+      - name: Checkout repository
+        uses: actions/checkout@v4                                  # :contentReference[oaicite:1]{index=1}
+
+      # 2. Build & stage your Astro site
+      - name: Build Astro site
+        uses: withastro/action@v4                                   # :contentReference[oaicite:2]{index=2}
+        # no 'with' block needed unless your Astro project lives in a subfolder
+
+      # 3. Publish to GitHub Pages
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2                               # :contentReference[oaicite:3]{index=3}
+
