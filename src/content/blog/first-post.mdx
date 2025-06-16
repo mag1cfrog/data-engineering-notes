@@ -1,10 +1,11 @@
 ---
-title: "First Lesson: Partition vs Broadcast"
+title: "First Lesson: Window Function Performance Disaster"
 pubDate: 2025-06-13T12:00:00-08:00
 tags:
   - spark
   - optimization
-description: "How switching from partitioned joins to broadcast joins reduced shuffle writes from 8GB to 500MB"
+  - window-functions
+description: "How a simple ROW_NUMBER() window function caused 391GB of disk spilling and 33+ minute execution times"
 draft: true
 ---
 import { Image } from 'astro:assets';
@@ -31,7 +32,11 @@ WITH ranked AS (
     lineup.position_alpha,
     ROW_NUMBER() OVER (
       PARTITION BY game_id, pitch_uid, position_num, event_time
-      ORDER BY processed_year DESC, processed_month DESC, processed_day DESC
+      ORDER BY 
+        processed_year DESC, 
+        processed_month DESC, 
+        processed_day DESC, 
+        tie_breakers (x, y, z coordinates)
     ) AS rn
   FROM hawkeye_tracking tracking
   JOIN hawkeye_lineup lineup ON (...)
@@ -42,6 +47,8 @@ WHERE rn = 1
 ```
 
 Although the query itself doesn't look complex, the long execution time of it raised some concerns. With the table sized at only a couple hundreds of GBs, why would it take over 30 mins to run on Databricks, even with a medium-sized SQL warehouse? Something's clearly wrong here, so I dove into DBX's query profile to investigate.
+
+**Warehouse Size Investigation**: I tested the same query on both an x-small serverless warehouse and a medium warehouse, and surprisingly, the execution times were nearly identical (~33 minutes). This immediately suggested that the bottleneck wasn't compute capacity but rather an algorithmic or I/O problem.
 
 ### Query Profile Analysis
 
@@ -113,3 +120,177 @@ This confirms that our window function's `ROW_NUMBER() OVER (PARTITION BY ... OR
 3. **Spill to disk** when the sorted data exceeded memory
 
 The combination of a large dataset with complex partitioning and sorting was overwhelming Spark's memory management, causing the performance disaster we observed.
+
+#### The Double Shuffle-Sort Mystery
+
+But here's what puzzled me initially: **Why were there multiple shuffle operations consuming so much time?**
+
+Looking at the operations DAG here:
+<Image 
+  src={dagView} 
+  alt="DAG of the databricks operations" 
+  width={600} 
+  height={500}
+  style="width: 80%; object-fit: contain; border-radius: 8px; margin: 2rem 0;"
+/>
+(huge sort on #11 and #7, massive shuffle on #8 and #4)
+
+My first instinct was: *"Is Spark doing a duplicate shuffle-sort? Why is that?"*
+
+#### Understanding What Happened: Sort-based Aggregation
+
+To understand what went wrong, I needed to dig into how Spark handles large datasets. It turns out Spark has two strategies for aggregation:
+
+**Hash-based Aggregation (Preferred)**:
+- Creates an in-memory hash table for each unique group key
+- Updates aggregate values directly as it processes rows
+- Fast because it avoids sorting
+- **Critical limitation**: Requires all intermediate results to fit in memory
+
+**Sort-based Aggregation (Fallback)**:
+- Used when hash-based aggregation fails due to memory constraints
+- Process: Shuffle data by grouping keys → Sort within partitions → Aggregate
+- Can handle larger datasets but much slower due to sorting overhead
+
+**Here's what happened in our case**: Our dataset was too large for hash-based aggregation, so Spark automatically fell back to sort-based aggregation. But we weren't just doing simple aggregation—we also had a window function, which created a perfect storm.
+
+#### The Double Penalty: Why We Had Multiple Sorts
+
+Our query had both aggregation-like behavior AND a window function, which meant we got hit with a double penalty:
+
+1. **Sort-based aggregation phase**: Because our intermediate results were too large for memory, Spark had to use sort-based aggregation for the preliminary data processing. This involved:
+   - Shuffling data by certain grouping keys
+   - Sorting within each partition to enable efficient aggregation
+   - Preparing data for the subsequent window function
+
+2. **Window function sorting phase**: The `ROW_NUMBER()` window function then required its own sorting operations:
+   - **Additional shuffle** by the `PARTITION BY` keys (`game_id`, `pitch_uid`, `position_num`, `event_time`)
+   - **Additional sort** within each partition by the `ORDER BY` clause (`processed_year DESC`, `processed_month DESC`, `processed_day DESC`)
+
+So our execution plan looked like:
+```
+Data → Sort-based Agg Shuffle → Sort-based Agg Sort → Window Shuffle → Window Sort → Results
+```
+
+Each arrow represents massive data movement with 2.3 billion rows, and each sort operation risked spilling to disk when memory was exceeded.
+
+#### Why This Was So Expensive
+
+The problem compounded because:
+
+- **Volume amplification**: Each operation had to process the full 2.3 billion rows
+- **Memory pressure cascade**: The first sort operation filled up memory, making subsequent operations more likely to spill
+- **Multiple network shuffles**: Data moved across the cluster multiple times
+- **Disk I/O bottleneck**: Once spilling started (391GB!), the entire pipeline became I/O bound
+
+This explains the performance characteristics we observed:
+- **Shuffle operations taking 47.8% of time**: Multiple data redistribution phases
+- **Sort operations taking 34.6% of time**: Multiple sorting phases with different criteria  
+- **Warehouse size didn't matter**: Once you're spilling hundreds of GBs to disk, more CPU cores can't help
+
+The combination of large dataset size, memory-constrained sort-based aggregation, AND window function requirements created a performance disaster where each operation made the next one worse.
+
+#### The Real Problem: We Don't Need Full Sorting!
+
+Here's the key insight: **We're doing way more work than necessary.**
+
+Our goal was simple: for each combination of `game_id`, `pitch_uid`, `position_num`, and `event_time`, we only wanted the record with the highest values of `processed_year`, `processed_month`, and `processed_day`.
+
+But our ROW_NUMBER() window function forced Spark to:
+1. **Shuffle all 2.3 billion rows** by partition keys
+2. **Fully sort each partition** by the ORDER BY clause  
+3. **Assign row numbers to every single row**
+4. **Filter out everything except rn = 1**
+
+We were essentially sorting millions of rows in each partition just to pick the "top 1"—that's massively inefficient!
+
+#### The Solution: max_by Function
+
+After some research, I discovered that Spark 3.0+ introduced the `max_by` function, which is **exactly** what we need:
+
+```sql
+-- Instead of this expensive window function:
+WITH ranked AS (
+  SELECT 
+    tracking.*,
+    lineup.fielder_id,
+    lineup.position_alpha,
+    ROW_NUMBER() OVER (
+      PARTITION BY game_id, pitch_uid, position_num, event_time
+      ORDER BY processed_year DESC, processed_month DESC, processed_day DESC
+    ) AS rn
+  FROM hawkeye_tracking tracking
+  JOIN hawkeye_lineup lineup ON (...)
+)
+SELECT * EXCEPT (rn) FROM ranked WHERE rn = 1
+
+-- We can use this much more efficient approach:
+SELECT 
+  game_id,
+  pitch_uid, 
+  position_num,
+  event_time,
+  MAX_BY(
+    STRUCT(tracking.*, lineup.fielder_id, lineup.position_alpha),
+    STRUCT(processed_year, processed_month, processed_day)
+  ).*
+FROM hawkeye_tracking tracking
+JOIN hawkeye_lineup lineup ON (...)
+GROUP BY game_id, pitch_uid, position_num, event_time
+```
+
+### How max_by Works Under the Hood
+
+To understand why `max_by` is so much more efficient, I dug into the Spark source code. Here's the key implementation from `MaxByAndMinBy.scala`:
+
+```scala
+/**
+ * The shared abstract superclass for `MaxBy` and `MinBy` SQL aggregate functions.
+ */
+abstract class MaxMinBy extends DeclarativeAggregate with BinaryLike[Expression] {
+  
+  // The attributes used to keep extremum (max or min) and associated aggregated values.
+  private lazy val extremumOrdering =
+    AttributeReference("extremumOrdering", orderingExpr.dataType)()
+  private lazy val valueWithExtremumOrdering =
+    AttributeReference("valueWithExtremumOrdering", valueExpr.dataType)()
+
+  override lazy val updateExpressions: Seq[Expression] = Seq(
+    /* valueWithExtremumOrdering = */
+    CaseWhen(
+      (extremumOrdering.isNull && orderingExpr.isNull, nullValue) ::
+        (extremumOrdering.isNull, valueExpr) ::
+        (orderingExpr.isNull, valueWithExtremumOrdering) :: Nil,
+      If(predicate(extremumOrdering, orderingExpr), valueWithExtremumOrdering, valueExpr)
+    ),
+    /* extremumOrdering = */ orderingUpdater(extremumOrdering, orderingExpr)
+  )
+}
+
+case class MaxBy(valueExpr: Expression, orderingExpr: Expression) extends MaxMinBy {
+  override def prettyName: String = "max_by"
+  
+  override protected def predicate(oldExpr: Expression, newExpr: Expression): Expression =
+    oldExpr > newExpr
+    
+  override protected def orderingUpdater(oldExpr: Expression, newExpr: Expression): Expression =
+    greatest(oldExpr, newExpr)
+}
+```
+
+**The key insight**: Instead of collecting and sorting all rows in each partition, `max_by` uses an **incremental aggregation approach**:
+
+1. **For each partition, maintain only two values**:
+   - `valueWithExtremumOrdering`: The current "best" record
+   - `extremumOrdering`: The current maximum ordering value
+
+2. **For each new row, do a simple comparison**:
+   - If `new_ordering > current_max_ordering`, update both values
+   - Otherwise, keep the current values
+
+3. **No sorting required**: Just O(1) comparisons per row instead of O(n log n) sorting
+
+This means:
+- **Memory usage**: O(1) per partition instead of O(n)
+- **CPU complexity**: O(n) instead of O(n log n)
+- **Less disk spilling**: The intermediate state fits more easily in memory
