@@ -5,8 +5,8 @@ import sitemap from '@astrojs/sitemap';
 
 // https://astro.build/config
 export default defineConfig({
-	site: 'https://mag1cfrog.github.io',
-	base: '/spark-tuning-notes/',
+	site: 'https://mag1cfrog.github.io/spark-tuning-notes/',
 	output: 'static',
 	integrations: [mdx(), sitemap()],
 });
+	

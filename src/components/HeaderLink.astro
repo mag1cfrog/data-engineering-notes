@@ -1,24 +1,29 @@
 ---
 import type { HTMLAttributes } from 'astro/types';
 
-type Props = HTMLAttributes<'a'>;
+/* 1️⃣ Force href to be a string so TS stops complaining */
+interface Props extends Omit<HTMLAttributes<'a'>, 'href'> {
+  href: string;
+}
+const { href, class: className, ...rest } = Astro.props as Props;
 
-const { href, class: className, ...props } = Astro.props;
-const pathname = Astro.url.pathname.replace(import.meta.env.BASE_URL, '');
-const subpath = pathname.match(/[^\/]+/g);
-const isActive = href === pathname || href === '/' + (subpath?.[0] || '');
+/* 2️⃣ Build the correct URL (adds `/spark-tuning-notes/` in prod) */
+const finalHref = (Astro as any).resolve?.(href) ?? href;        // e.g. "/spark-tuning-notes/blog"
+
+/* 3️⃣ Active-link logic – compare full paths */
+const current = Astro.url.pathname;          // already includes base
+const isActive = finalHref === current ||
+  (current.startsWith(finalHref) && href !== '/');
+
+/* 4️⃣ Combine classes */
+const classes = [className, { active: isActive }];
 ---
 
-<a href={href} class:list={[className, { active: isActive }]} {...props}>
-	<slot />
+<a href={finalHref} class:list={classes} {...rest}>
+  <slot />
 </a>
+
 <style>
-	a {
-		display: inline-block;
-		text-decoration: none;
-	}
-	a.active {
-		font-weight: bolder;
-		text-decoration: underline;
-	}
+  a { display:inline-block; text-decoration:none; }
+  a.active { font-weight:bold; text-decoration:underline; }
 </style>
