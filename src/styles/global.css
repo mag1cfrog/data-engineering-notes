@@ -117,6 +117,14 @@ pre {
 pre > code {
 	all: unset;
 }
+
+/* More specific targeting for SQL code blocks */
+pre[data-language="sql"] {
+    font-size: 15px !important;
+    line-height: 1.5 !important;
+	
+}
+
 blockquote {
 	border-left: 4px solid var(--accent);
 	padding: 0 0 0 20px;
