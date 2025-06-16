@@ -7,13 +7,17 @@ interface Props extends Omit<HTMLAttributes<'a'>, 'href'> {
 }
 const { href, class: className, ...rest } = Astro.props as Props;
 
-/* 2️⃣ Build the correct URL (adds `/spark-tuning-notes/` in prod) */
-const finalHref = (Astro as any).resolve?.(href) ?? href;        // e.g. "/spark-tuning-notes/blog"
+const base = import.meta.env.BASE_URL || '/';
+
+const finalHref = href === '/' ? base : base + href.replace(/^\//, '');
 
 /* 3️⃣ Active-link logic – compare full paths */
 const current = Astro.url.pathname;          // already includes base
-const isActive = finalHref === current ||
-  (current.startsWith(finalHref) && href !== '/');
+// For the home page, only match exactly
+// For other pages, match exactly OR if current starts with finalHref but not with base alone
+const isActive = href === '/' 
+  ? current === finalHref
+  : current === finalHref || (current.startsWith(finalHref + '/') && finalHref !== base);
 
 /* 4️⃣ Combine classes */
 const classes = [className, { active: isActive }];
