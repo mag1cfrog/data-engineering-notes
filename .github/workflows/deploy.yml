@@ -13,33 +13,33 @@ permissions:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-
     steps:
-      # 1️⃣ Fetch your code
-      - name: Checkout repository
-        uses: actions/checkout@v4                                               
 
-      # 2️⃣ Setup Node.js & build
+      # 1️⃣ Checkout your code
+      - name: Checkout repository
+        uses: actions/checkout@v4                                           
+
+      # 2️⃣ Setup Node and build your Astro site
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18'                                                        
-      - name: Install dependencies & build
+          node-version: "18"
+      - name: Install & build
         run: |
           npm ci
-          npm run build                                                           
+          npm run build                                                    
 
       # 3️⃣ Configure the Pages environment
-      - name: Configure Pages
-        uses: actions/configure-pages@v3                                          
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5                                   
 
-      # 4️⃣ Upload the built site as an artifact
+      # 4️⃣ Upload the built site (uses upload-artifact@v4 internally)
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v1                                    
+        uses: actions/upload-pages-artifact@v3                             
         with:
-          path: ./dist                                                           
+          path: ./dist                                                    
 
       # 5️⃣ Deploy to GitHub Pages
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v2                                            
+        uses: actions/deploy-pages@v4                                     
