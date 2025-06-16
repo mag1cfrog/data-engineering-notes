@@ -2,30 +2,44 @@ name: Deploy Astro to GitHub Pages
 
 on:
   push:
-    branches: [ main ]           # or your default branch
-  workflow_dispatch:             # allow manual runs
+    branches: [ main ]
+  workflow_dispatch:
 
 permissions:
-  contents: read                 # for checkout
-  pages: write                   # to publish
-  id-token: write                # for OIDC
+  contents: read
+  pages: write
+  id-token: write
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Fetch your code
+      # 1️⃣ Fetch your code
       - name: Checkout repository
-        uses: actions/checkout@v4                                  # :contentReference[oaicite:1]{index=1}
+        uses: actions/checkout@v4                                               
 
-      # 2. Build & stage your Astro site
-      - name: Build Astro site
-        uses: withastro/action@v4                                   # :contentReference[oaicite:2]{index=2}
-        # no 'with' block needed unless your Astro project lives in a subfolder
+      # 2️⃣ Setup Node.js & build
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'                                                        
+      - name: Install dependencies & build
+        run: |
+          npm ci
+          npm run build                                                           
 
-      # 3. Publish to GitHub Pages
+      # 3️⃣ Configure the Pages environment
+      - name: Configure Pages
+        uses: actions/configure-pages@v3                                          
+
+      # 4️⃣ Upload the built site as an artifact
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v1                                    
+        with:
+          path: ./dist                                                           
+
+      # 5️⃣ Deploy to GitHub Pages
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v2                               # :contentReference[oaicite:3]{index=3}
-
+        uses: actions/deploy-pages@v2                                            
