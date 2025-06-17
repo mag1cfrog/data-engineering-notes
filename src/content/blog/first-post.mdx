@@ -5,7 +5,7 @@ tags:
   - spark
   - optimization
   - window-functions
-description: "How a simple ROW_NUMBER() window function caused 391GB of disk spilling and 33+ minute execution times"
+description: "How a simple ROW_NUMBER() window function caused 391 GB of disk spilling and 33+ minute execution times"
 draft: true
 ---
 import { Image } from 'astro:assets';
@@ -14,13 +14,16 @@ import queryProfile2 from '../../assets/img/dbx_query_profile_2.jpg';
 import topOperators from '../../assets/img/dbx_query_top_operators.jpg';
 import operation11 from '../../assets/img/dbx_query_operation_11.jpg';
 import dagView from '../../assets/img/dbx_query_dag_view.jpg';
+import queryProfileAo from '../../assets/img/dbx_query_profile_ao.jpg';
+import queryProfileAo2 from '../../assets/img/dbx_query_profile_ao2.jpg';
+import topOperatorsAo from '../../assets/img/dbx_query_top_operators_ao.jpg';
 
 ### Intro
 
-I work for an MLB team, and we process massive amounts of baseball tracking data every day. Recently, we had a Spark job on Databricks that needed to join an enormous table (player tracking records with coordinates for each frame) with a dimensional table (position number to player uid mapping), then perform deduplication using a window function.
+I work for an MLB team, and we process massive amounts of baseball tracking data every day. Recently, we had a Spark job on Databricks that needed to join an enormous fact table (player tracking records with coordinates for each frame) with a dimensional table (position number to player uid mapping), then perform deduplication using a window function.
 
 
-##### The Deduplication Challenge
+#### 1. The Original Query
 
 The core logic involved a window function to handle duplicate records (some psedudo SQL):
 
@@ -36,7 +39,7 @@ WITH ranked AS (
         processed_year DESC, 
         processed_month DESC, 
         processed_day DESC, 
-        tie_breakers (x, y, z coordinates)
+        tie_breakers (x, y, z coordinates) -- tie_breaker: x, y, z coordinates
     ) AS rn
   FROM hawkeye_tracking tracking
   JOIN hawkeye_lineup lineup ON (...)
@@ -46,11 +49,11 @@ FROM ranked
 WHERE rn = 1
 ```
 
-Although the query itself doesn't look complex, the long execution time of it raised some concerns. With the table sized at only a couple hundreds of GBs, why would it take over 30 mins to run on Databricks, even with a medium-sized SQL warehouse? Something's clearly wrong here, so I dove into DBX's query profile to investigate.
+Although the query itself doesn't look complex, the long execution time of it raised some concerns. With the table sized at only a few hundred GB, why would it take over 30 mins to run on Databricks, even with a medium-sized SQL warehouse? Something's clearly wrong here, so I dove into DBX's query profile to investigate.
 
 **Warehouse Size Investigation**: I tested the same query on both an x-small serverless warehouse and a medium warehouse, and surprisingly, the execution times were nearly identical (~33 minutes). This immediately suggested that the bottleneck wasn't compute capacity but rather an algorithmic or I/O problem.
 
-### Query Profile Analysis
+#### 2. Query Profile Analysis
 
 Looking at the query profile, I immediately spotted the issue:
 
@@ -71,12 +74,12 @@ Looking at the query profile, I immediately spotted the issue:
   />
 </div>
 
-#### The Real Problem: Massive Disk Spilling
+#### 3. The Real Problem: Massive Disk Spilling
 
-**391.87 GB of disk spilling**
-This was the biggest red flag. The query spilled nearly 400GB to disk, which is almost 3x the amount of data actually read (146.66 GB). This indicates that Spark couldn't fit the intermediate results in memory and had to write them to disk repeatedly - a huge performance killer.
+**391.9 GB spilled to disk**
+This was the biggest red flag. The query spilled nearly 400 GB to disk, which is almost 3x the amount of data actually read (146.66 GB). This indicates that Spark could not fit the intermediate results in memory and had to write them to disk repeatedly - a huge performance killer.
 
-#### Digging Deeper: Top Operators Analysis
+#### 4. Digging Deeper: Top Operators Analysis
 
 To understand what was causing this massive spilling, I clicked into the "Top operators" view:
 
@@ -93,7 +96,7 @@ The analysis revealed:
 - **Sort operations** took 34.6% of the time (56.27 minutes)
 - The window function was clearly the bottleneck
 
-#### Root cause: Window Function Sorting
+#### 5. Root cause: Window Function Sorting Bottleneck
 
 Clicking into Sort operation #11, I found the smoking gun:
 <Image 
@@ -121,7 +124,7 @@ This confirms that our window function's `ROW_NUMBER() OVER (PARTITION BY ... OR
 
 The combination of a large dataset with complex partitioning and sorting was overwhelming Spark's memory management, causing the performance disaster we observed.
 
-#### The Double Shuffle-Sort Mystery
+#### 6. The Double Shuffle-Sort Mystery
 
 But here's what puzzled me initially: **Why were there multiple shuffle operations consuming so much time?**
 
@@ -137,7 +140,7 @@ Looking at the operations DAG here:
 
 My first instinct was: *"Is Spark doing a duplicate shuffle-sort? Why is that?"*
 
-#### Understanding What Happened: Sort-based Aggregation
+#### 7. Understanding What Happened: Sort-based Aggregation
 
 To understand what went wrong, I needed to dig into how Spark handles large datasets. It turns out Spark has two strategies for aggregation:
 
@@ -154,7 +157,7 @@ To understand what went wrong, I needed to dig into how Spark handles large data
 
 **Here's what happened in our case**: Our dataset was too large for hash-based aggregation, so Spark automatically fell back to sort-based aggregation. But we weren't just doing simple aggregation—we also had a window function, which created a perfect storm.
 
-#### The Double Penalty: Why We Had Multiple Sorts
+#### 8. The Double Penalty: Why We Had Multiple Sorts
 
 Our query had both aggregation-like behavior AND a window function, which meant we got hit with a double penalty:
 
@@ -174,14 +177,14 @@ Data → Sort-based Agg Shuffle → Sort-based Agg Sort → Window Shuffle → W
 
 Each arrow represents massive data movement with 2.3 billion rows, and each sort operation risked spilling to disk when memory was exceeded.
 
-#### Why This Was So Expensive
+#### 9. Why This Was So Expensive
 
 The problem compounded because:
 
 - **Volume amplification**: Each operation had to process the full 2.3 billion rows
 - **Memory pressure cascade**: The first sort operation filled up memory, making subsequent operations more likely to spill
 - **Multiple network shuffles**: Data moved across the cluster multiple times
-- **Disk I/O bottleneck**: Once spilling started (391GB!), the entire pipeline became I/O bound
+- **Disk I/O bottleneck**: Once spilling started (391 GB!), the entire pipeline became I/O bound
 
 This explains the performance characteristics we observed:
 - **Shuffle operations taking 47.8% of time**: Multiple data redistribution phases
@@ -190,7 +193,7 @@ This explains the performance characteristics we observed:
 
 The combination of large dataset size, memory-constrained sort-based aggregation, AND window function requirements created a performance disaster where each operation made the next one worse.
 
-#### The Real Problem: We Don't Need Full Sorting!
+#### 10. The Real Problem: We Don't Need Full Sorting!
 
 Here's the key insight: **We're doing way more work than necessary.**
 
@@ -202,9 +205,9 @@ But our ROW_NUMBER() window function forced Spark to:
 3. **Assign row numbers to every single row**
 4. **Filter out everything except rn = 1**
 
-We were essentially sorting millions of rows in each partition just to pick the "top 1"—that's massively inefficient!
+We were essentially sorting every row in each partition just to pick the "top 1"—that's massively inefficient!
 
-#### The Solution: max_by Function
+#### 11. The Solution: max_by Function
 
 After some research, I discovered that Spark 3.0+ introduced the `max_by` function, which is **exactly** what we need:
 
@@ -239,7 +242,7 @@ JOIN hawkeye_lineup lineup ON (...)
 GROUP BY game_id, pitch_uid, position_num, event_time
 ```
 
-#### How max_by Works Under the Hood
+#### 12. How max_by Works Under the Hood
 
 To understand why `max_by` is so much more efficient, I dug into the Spark source code. Here's the key implementation from [MaxByAndMinBy.scala](https://github.com/apache/spark/blob/59e6b5b7d350a1603502bc92e3c117311ab2cbb6/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/aggregate/MaxByAndMinBy.scala#L108):
 
@@ -295,6 +298,7 @@ This means:
 - **CPU complexity**: O(n) instead of O(n log n)
 - **Less disk spilling**: The intermediate state fits more easily in memory
 
+#### 13. Packed Ordering Key Optimisation
 And to further optimize the performance of the query, we can even convert the struct we used for ord key into a single int64 with bit manipulation, so that the comparison between records is even faster.
 
 ```sql
@@ -365,6 +369,7 @@ winner AS (
 
 ------------------------------
 
+#### 14. Hash-Agg vs Sort-Agg Deep Dive
 
 So this removed the sorting inside the window function, but what about the sorting before it? In another word, how can we make sure we are using **hash agg** instead of sort agg? 
 
@@ -494,10 +499,12 @@ private[sql] def supportsBinaryEquality: Boolean =
       CollationFactory.fetchCollation(collationId).supportsBinaryEquality
 ```
 
-so it seems like as long as we don't use a different collation than uft8_binary then all the strings should be binary stable.
+so it seems like as long as we don't use a different collation than utf8_binary then all the strings should be binary stable.
 
 -----------------------
 Unfortunately because we have string types in our fields of our max_by function and they are not mutable, a typical hash agg is not feasible for our scenario.
+
+#### 15. Object-Hash Benchmark
 
 But Spark do have a different middle ground type of agg that's called ObjectHashAggregate that they introduced since version 2.2.0.
 
@@ -554,3 +561,36 @@ Object-hash-agg (useObjectHash=True): 41.5s, rows=274967745
 
 Like I said, the object hash agg way would take more RAM and give more pressure to the JVM GC, so not that ideal for our scenario where the grouping key cardinality is super high.
 
+#### 16. Post-Optimisation Results (12-min Run)
+
+<Image 
+  src={queryProfileAo}  
+  alt="Optimised query profile showing 12-minute runtime" 
+  width={500} height={300}
+  style="width: 100%; height: 100%; object-fit: contain; border-radius: 2px;"
+/>
+
+<Image 
+    src={queryProfileAo2}
+    alt="Optimised IO panel: 297 GB spill" 
+    width={500} height={400}
+    style="width: 100%; height: 100%; object-fit: contain; border-radius: 2px;"
+  />
+
+<Image 
+  src={topOperatorsAo}
+  alt="Top operators after fix — shuffle dominates, sorts minimal" 
+  width={600} height={450}
+  style="width: 100%; object-fit: contain; border-radius: 8px; margin: 2rem 0;"
+/>
+
+Key takeaways after replacing `ROW_NUMBER()` with `max_by`:
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Wall-clock time | ~33 min | **12 min 37 s** |
+| Disk spill | 391 GB | **297 GB** |
+| Top operator | Sort (34 %) | **Shuffle (63 %)** |
+| Warehouse size sensitivity | None | Still I/O-bound but 2.7x faster |
+
+> **Why some spill remains:** Serverless SQL warehouses use fixed executor sizes. With 2.9 b rows, the grouping hash map still evicts pages to disk. A classic cluster with beefier executors runs spill-free.
