@@ -232,16 +232,16 @@ SELECT
   event_time,
   MAX_BY(
     STRUCT(tracking.*, lineup.fielder_id, lineup.position_alpha),
-    STRUCT(processed_year, processed_month, processed_day)
+    STRUCT(processed_year, processed_month, processed_day, tie_breakers)
   ).*
 FROM hawkeye_tracking tracking
 JOIN hawkeye_lineup lineup ON (...)
 GROUP BY game_id, pitch_uid, position_num, event_time
 ```
 
-### How max_by Works Under the Hood
+#### How max_by Works Under the Hood
 
-To understand why `max_by` is so much more efficient, I dug into the Spark source code. Here's the key implementation from `MaxByAndMinBy.scala`:
+To understand why `max_by` is so much more efficient, I dug into the Spark source code. Here's the key implementation from [MaxByAndMinBy.scala](https://github.com/apache/spark/blob/59e6b5b7d350a1603502bc92e3c117311ab2cbb6/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/aggregate/MaxByAndMinBy.scala#L108):
 
 ```scala
 /**
@@ -294,3 +294,104 @@ This means:
 - **Memory usage**: O(1) per partition instead of O(n)
 - **CPU complexity**: O(n) instead of O(n log n)
 - **Less disk spilling**: The intermediate state fits more easily in memory
+
+So this removed the sorting inside the window function, but what about the sorting before it? In another word, how can we make sure we are using **hash agg** instead of sort agg? 
+
+Although Spark doesn't directly expose an option for us to choose which one to use and supposely would just pick hash agg whenever it's possible, let's check Spark's source code again to confirm.
+
+from Spark's [AggUtils.scala](https://github.com/apache/spark/blob/master/sql/core/src/main/scala/org/apache/spark/sql/execution/aggregate/AggUtils.scala#L69) module we can see:
+```scala
+private def createAggregate(
+      requiredChildDistributionExpressions: Option[Seq[Expression]] = None,
+      isStreaming: Boolean = false,
+      groupingExpressions: Seq[NamedExpression] = Nil,
+      aggregateExpressions: Seq[AggregateExpression] = Nil,
+      aggregateAttributes: Seq[Attribute] = Nil,
+      initialInputBufferOffset: Int = 0,
+      resultExpressions: Seq[NamedExpression] = Nil,
+      child: SparkPlan): SparkPlan = {
+    val useHash = Aggregate.supportsHashAggregate(
+      aggregateExpressions.flatMap(_.aggregateFunction.aggBufferAttributes), groupingExpressions)
+
+    val forceObjHashAggregate = forceApplyObjectHashAggregate(child.conf)
+    val forceSortAggregate = forceApplySortAggregate(child.conf)
+
+    if (useHash && !forceSortAggregate && !forceObjHashAggregate) {
+      HashAggregateExec(
+        requiredChildDistributionExpressions = requiredChildDistributionExpressions,
+        isStreaming = isStreaming,
+        numShufflePartitions = None,
+        groupingExpressions = groupingExpressions,
+        aggregateExpressions = mayRemoveAggFilters(aggregateExpressions),
+        aggregateAttributes = aggregateAttributes,
+        initialInputBufferOffset = initialInputBufferOffset,
+        resultExpressions = resultExpressions,
+        child = child)
+    } else {
+      val objectHashEnabled = child.conf.useObjectHashAggregation
+      val useObjectHash = Aggregate.supportsObjectHashAggregate(
+        aggregateExpressions, groupingExpressions)
+
+      if (forceObjHashAggregate || (objectHashEnabled && useObjectHash && !forceSortAggregate)) {
+        ObjectHashAggregateExec(
+          requiredChildDistributionExpressions = requiredChildDistributionExpressions,
+          isStreaming = isStreaming,
+          numShufflePartitions = None,
+          groupingExpressions = groupingExpressions,
+          aggregateExpressions = mayRemoveAggFilters(aggregateExpressions),
+          aggregateAttributes = aggregateAttributes,
+          initialInputBufferOffset = initialInputBufferOffset,
+          resultExpressions = resultExpressions,
+          child = child)
+      } else {
+        SortAggregateExec(
+          requiredChildDistributionExpressions = requiredChildDistributionExpressions,
+          isStreaming = isStreaming,
+          numShufflePartitions = None,
+          groupingExpressions = groupingExpressions,
+          aggregateExpressions = mayRemoveAggFilters(aggregateExpressions),
+          aggregateAttributes = aggregateAttributes,
+          initialInputBufferOffset = initialInputBufferOffset,
+          resultExpressions = resultExpressions,
+          child = child)
+      }
+    }
+  }
+```
+
+to understand what's `Aggregate.supportsHashAggregate`, we found the [basicLogicalOperators.scala](https://github.com/apache/spark/blob/26956365935d1d5708cd153021729ed195cd34b5/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/plans/logical/basicLogicalOperators.scala#L1185) as:
+```scala
+def supportsHashAggregate(
+      aggregateBufferAttributes: Seq[Attribute], groupingExpression: Seq[Expression]): Boolean = {
+    val aggregationBufferSchema = DataTypeUtils.fromAttributes(aggregateBufferAttributes)
+    isAggregateBufferMutable(aggregationBufferSchema) &&
+      groupingExpression.forall(e => UnsafeRowUtils.isBinaryStable(e.dataType))
+  }
+```
+
+which means for the agg buffer describing all the fields from the function has to be **mutable**, and every grouping expressions's data type has to be **binary stable**.
+
+- **mutable**:
+based on source code from [here](https://github.com/apache/spark/blob/26956365935d1d5708cd153021729ed195cd34b5/sql/catalyst/src/main/java/org/apache/spark/sql/catalyst/expressions/UnsafeRow.java#L90):
+
+```java
+public static boolean isMutable(DataType dt) {
+    if (dt instanceof UserDefinedType udt) {
+      return isMutable(udt.sqlType());
+    }
+    PhysicalDataType pdt = PhysicalDataType.apply(dt);
+    return pdt instanceof PhysicalPrimitiveType || pdt instanceof PhysicalDecimalType ||
+      pdt instanceof PhysicalCalendarIntervalType;
+  }
+```
+
+only these data types are [considered as mutable](https://github.com/apache/spark/blob/26956365935d1d5708cd153021729ed195cd34b5/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/types/PhysicalDataType.scala#L69):
+1. **PhysicalPrimitiveType**:
+- PhysicalBooleanType
+- PhysicalByteType
+- PhysicalShortType
+- PhysicalIntegerType
+- PhysicalLongType
+- PhysicalFloatType
+- PhysicalDoubleType
+- PhysicalNullType
