@@ -7,6 +7,7 @@ tags:
   - window-functions
 description: "How a simple ROW_NUMBER() window function caused 391 GB of disk spilling and 33+ minute execution times"
 draft: true
+showToc: true
 ---
 import { Image } from 'astro:assets';
 import queryProfile1 from '../../assets/img/dbx_query_profile_1.jpg';
@@ -18,7 +19,8 @@ import queryProfileAo from '../../assets/img/dbx_query_profile_ao.jpg';
 import queryProfileAo2 from '../../assets/img/dbx_query_profile_ao2.jpg';
 import topOperatorsAo from '../../assets/img/dbx_query_top_operators_ao.jpg';
 
-### Intro
+
+#### Intro
 
 I work for an MLB team, and we process massive amounts of baseball tracking data every day. Recently, we had a Spark job on Databricks that needed to join an enormous fact table (player tracking records with coordinates for each frame) with a dimensional table (position number to player uid mapping), then perform deduplication using a window function.
 
