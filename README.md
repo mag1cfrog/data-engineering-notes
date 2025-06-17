@@ -1,68 +1,47 @@
-# Astro Starter Kit: Blog
+# Spark Tuning Notes
 
-```sh
-npm create astro@latest -- --template blog
-```
+A collection of Apache Spark performance optimization lessons learned from real-world production workloads.
 
-[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/github/withastro/astro/tree/latest/examples/blog)
-[![Open with CodeSandbox](https://assets.codesandbox.io/github/button-edit-lime.svg)](https://codesandbox.io/p/sandbox/github/withastro/astro/tree/latest/examples/blog)
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/withastro/astro?devcontainer_path=.devcontainer/blog/devcontainer.json)
+## 📖 Read the Blog
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+Visit the live blog: **[mag1cfrog.github.io/spark-tuning-notes](https://mag1cfrog.github.io/spark-tuning-notes/)**
 
-![blog](https://github.com/withastro/astro/assets/2244813/ff10799f-a816-4703-b967-c78997e8323d)
+## 🚀 What You'll Learn
 
-Features:
+This blog documents practical Spark optimization techniques gained from working with massive datasets in production environments, including:
 
-- ✅ Minimal styling (make it your own!)
-- ✅ 100/100 Lighthouse performance
-- ✅ SEO-friendly with canonical URLs and OpenGraph data
-- ✅ Sitemap support
-- ✅ RSS Feed support
-- ✅ Markdown & MDX support
+- **Window Function Performance**: How a simple `ROW_NUMBER()` window function caused 391 GB of disk spilling and 33+ minute execution times
+- **Hash vs Sort Aggregation**: Understanding when Spark falls back to expensive sort-based aggregation and how to avoid it
+- **Memory Management**: Identifying and fixing disk spilling issues that kill performance
+- **Query Profile Analysis**: Reading Databricks query profiles to identify bottlenecks
+- **Alternative Approaches**: Using functions like `max_by()` to replace expensive window operations
 
-## 🚀 Project Structure
+## 🎯 Featured Case Study
 
-Inside of your Astro project, you'll see the following folders and files:
+**From 33 minutes to 12 minutes**: Learn how replacing a window function with `max_by()` eliminated massive sort operations and reduced execution time by 2.7x on a 2.3 billion row dataset.
 
-```text
-├── public/
-├── src/
-│   ├── components/
-│   ├── content/
-│   ├── layouts/
-│   └── pages/
-├── astro.config.mjs
-├── README.md
-├── package.json
-└── tsconfig.json
-```
+### Key Topics Covered:
+- Analyzing 391 GB disk spill causes
+- Understanding Spark's sort-based vs hash-based aggregation
+- Optimizing window functions for large datasets
+- Memory-efficient alternatives to `ROW_NUMBER()`
+- Production tuning for MLB tracking data processing
 
-Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
+## 🛠 Technical Stack
 
-There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
+This blog is built with:
+- ✅ **Astro** - Static site generator
+- ✅ **MDX** - Markdown with embedded components  
+- ✅ **Databricks** query profiles and performance screenshots
+- ✅ **Apache Spark** source code analysis
+- ✅ Real production workload examples
 
-The `src/content/` directory contains "collections" of related Markdown and MDX documents. Use `getCollection()` to retrieve posts from `src/content/blog/`, and type-check your frontmatter using an optional schema. See [Astro's Content Collections docs](https://docs.astro.build/en/guides/content-collections/) to learn more.
+## � Contributing
 
-Any static assets, like images, can be placed in the `public/` directory.
+Have your own Spark optimization stories? Contributions are welcome! This blog aims to be a practical resource for the Spark community.
 
-## 🧞 Commands
+## 🔗 Links
 
-All commands are run from the root of the project, from a terminal:
-
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
-
-## 👀 Want to learn more?
-
-Check out [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
-
-## Credit
-
-This theme is based off of the lovely [Bear Blog](https://github.com/HermanMartinus/bearblog/).
+- **Live Blog**: [mag1cfrog.github.io/spark-tuning-notes](https://mag1cfrog.github.io/spark-tuning-notes/)
+- **Astro Documentation**: [docs.astro.build](https://docs.astro.build)
+- **Apache Spark**: [spark.apache.org](https://spark.apache.org)
