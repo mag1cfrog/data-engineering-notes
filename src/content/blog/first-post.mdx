@@ -371,7 +371,7 @@ def supportsHashAggregate(
 
 which means for the agg buffer describing all the fields from the function has to be **mutable**, and every grouping expressions's data type has to be **binary stable**.
 
-- **mutable**:
+##### mutable:
 based on source code from [here](https://github.com/apache/spark/blob/26956365935d1d5708cd153021729ed195cd34b5/sql/catalyst/src/main/java/org/apache/spark/sql/catalyst/expressions/UnsafeRow.java#L90):
 
 ```java
@@ -386,7 +386,9 @@ public static boolean isMutable(DataType dt) {
 ```
 
 only these data types are [considered as mutable](https://github.com/apache/spark/blob/26956365935d1d5708cd153021729ed195cd34b5/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/types/PhysicalDataType.scala#L69):
+
 1. **PhysicalPrimitiveType**:
+which includes:
 - PhysicalBooleanType
 - PhysicalByteType
 - PhysicalShortType
@@ -395,3 +397,79 @@ only these data types are [considered as mutable](https://github.com/apache/spar
 - PhysicalFloatType
 - PhysicalDoubleType
 - PhysicalNullType
+
+2. **PhysicalDecimalType**
+
+3. **PhysicalCalendarIntervalType**
+
+##### binary stable:
+from the source code [here](https://github.com/apache/spark/blob/26956365935d1d5708cd153021729ed195cd34b5/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/util/UnsafeRowUtils.scala#L208):
+
+```scala
+def isBinaryStable(dataType: DataType): Boolean = !dataType.existsRecursively {
+    case st: StringType =>
+      !st.supportsBinaryEquality
+    case _ => false
+  }
+```
+
+and from [here](https://github.com/apache/spark/blob/26956365935d1d5708cd153021729ed195cd34b5/sql/api/src/main/scala/org/apache/spark/sql/types/StringType.scala#L47):
+
+we know that for `supportsBinaryEquality`:
+
+```scala
+private[sql] def supportsBinaryEquality: Boolean =
+    collationId == CollationFactory.UTF8_BINARY_COLLATION_ID ||
+      CollationFactory.fetchCollation(collationId).supportsBinaryEquality
+```
+
+so it seems like as long as we don't use a different collation than uft8_binary then all the strings should be binary stable.
+
+-----------------------
+Unfortunately because we have string types in our fields of our max_by function and they are not mutable, a typical hash agg is not feasible for our scenario.
+
+But Spark do have a different middle ground type of agg that's called ObjectHashAggregate that they introduced since version 2.2.0.
+
+Unlike the HashAggregateExec which stores aggregation buffers in the UnsafeRow in off-heap memory, the ObjectHashAggregateExec stores the aggregation buffers in the SpecificInternalRow which internally holds a Java Array collection of aggregation buffer fields in Java heap memory. 
+
+The ObjectHashAggregateExec uses an ObjectAggregationMap instance as the hash map instead of the UnsafeFixedWidthAggregationMap used by the HashAggregateExec. The ObjectAggregationMap supports storing arbitrary Java objects as aggregate buffer values.
+
+But for our use case, because our grouping key has really high cardinality ( over a couple hundreds of millions), the ObjectHashAgg method would consume much more RAM since it creates java object for each record, also brings enormous pressure to the JVM GC as they are stored on-heap.
+
+But still I do tested the same SQL query between a sort agg and a object hash agg:
+
+```python
+import time
+from pyspark.sql import functions as F
+
+# 1) Warm up the cache of 'scored' so both experiments start from memory
+print("Warming up scored cache…")
+scored.count()
+
+# 2) the same agg_sql as before, using unpacked primitives and 'ord'
+agg_sql = """
+SELECT struct(
+    ...
+) AS picked_row
+FROM (
+  SELECT *,
+    (SHIFTLEFT(date_key,49)
+     | SHIFTLEFT(x_inv,31)
+     | SHIFTLEFT(y_inv,13)
+     | z_inv) AS ord
+  FROM scored
+) t
+GROUP BY game_id, pitch_uid, position_num, event_time
+"""
+spark.conf.set("spark.sql.objectHashAggregate.sortBased.fallbackThreshold", 1000000000)
+
+def bench(label, use_obj_hash: bool):
+    spark.conf.set("spark.sql.execution.useObjectHashAggregate", str(use_obj_hash).lower())
+    start = time.time()
+    cnt = spark.sql(agg_sql).count()
+    print(f"{label:>20} (useObjectHash={use_obj_hash}): {time.time()-start:.1f}s, rows={cnt}")
+
+# 3) Benchmark sort-based vs object-hash back-to-back
+bench("Sort-based",     False)
+bench("Object-hash-agg", True)
+```
