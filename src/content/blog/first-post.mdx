@@ -544,3 +544,13 @@ def bench(label, use_obj_hash: bool):
 bench("Sort-based",     False)
 bench("Object-hash-agg", True)
 ```
+
+and the diff is not that significant:
+```text
+Warming up scored cache…
+Sort-based (useObjectHash=False): 47.7s, rows=274967745
+Object-hash-agg (useObjectHash=True): 41.5s, rows=274967745
+```
+
+Like I said, the object hash agg way would take more RAM and give more pressure to the JVM GC, so not that ideal for our scenario where the grouping key cardinality is super high.
+
