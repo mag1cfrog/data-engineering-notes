@@ -295,6 +295,77 @@ This means:
 - **CPU complexity**: O(n) instead of O(n log n)
 - **Less disk spilling**: The intermediate state fits more easily in memory
 
+And to further optimize the performance of the query, we can even convert the struct we used for ord key into a single int64 with bit manipulation, so that the comparison between records is even faster.
+
+```sql
+-- instead of directly using this expression
+MAX_BY(
+    STRUCT(tracking.*, lineup.fielder_id, lineup.position_alpha),
+    STRUCT(processed_year, processed_month, processed_day, tie_breakers)
+  ).*
+
+
+-- we convert the STRUCT(processed_year, processed_month, processed_day, tie_breakers) into one single int64
+
+scored AS (
+  SELECT
+    *,
+    -- days since 2000-01-01  (newer date ⇒ larger value)
+    datediff(
+      to_date('2000-01-01'),
+      to_date(
+        concat(
+          processed_year,
+          '-',
+          processed_month,
+          '-',
+          processed_day
+        )
+      )
+    ) * -1 AS date_key,
+    -- millifeet integers, inverted so that smaller coords win
+    CAST(262143 - ROUND(x_ft * 1000) AS BIGINT) AS x_inv,
+    -- BIGINT
+    CAST(262143 - ROUND(y_ft * 1000) AS BIGINT) AS y_inv,
+    CAST(8191 - ROUND(z_ft * 1000) AS BIGINT) AS z_inv
+  FROM
+    hashed
+),
+keys_only as (
+  SELECT
+    game_id,
+    pitch_uid,
+    position_num,
+    event_time,
+    pos_id64,
+    /* 64-bit packed ordering key */
+    (
+      SHIFTLEFT(CAST(date_key AS BIGINT), 49) | SHIFTLEFT(x_inv, 31) | SHIFTLEFT(y_inv, 13) | z_inv
+    ) AS ord_key
+  FROM
+    scored
+),
+winner AS (
+  -- hash aggregate, no spill
+  SELECT
+    MAX_BY(pos_id64, ord_key) AS pos_id64_winner,
+    game_id,
+    pitch_uid,
+    position_num,
+    event_time
+  FROM
+    keys_only
+  GROUP BY
+    game_id,
+    pitch_uid,
+    position_num,
+    event_time
+)
+```
+
+------------------------------
+
+
 So this removed the sorting inside the window function, but what about the sorting before it? In another word, how can we make sure we are using **hash agg** instead of sort agg? 
 
 Although Spark doesn't directly expose an option for us to choose which one to use and supposely would just pick hash agg whenever it's possible, let's check Spark's source code again to confirm.
