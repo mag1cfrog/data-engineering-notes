@@ -125,8 +125,15 @@ pre[data-language="sql"] {
 	
 }
 
-/* More specific targeting for SQL code blocks */
+/* More specific targeting for scala code blocks */
 pre[data-language="scala"] {
+    font-size: 15px !important;
+    line-height: 1.5 !important;
+	
+}
+
+/* More specific targeting for java code blocks */
+pre[data-language="java"] {
     font-size: 15px !important;
     line-height: 1.5 !important;
 	
