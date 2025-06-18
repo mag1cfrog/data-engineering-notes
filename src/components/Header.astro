@@ -1,11 +1,12 @@
 ---
 import HeaderLink from './HeaderLink.astro';
 import { SITE_TITLE } from '../consts';
+const base = import.meta.env.BASE_URL;
 ---
 
 <header>
 	<nav>
-		<h2><a href="/">{SITE_TITLE}</a></h2>
+		<h2><a href={`${base}`}>{SITE_TITLE}</a></h2>
 		<div class="internal-links">
 			<HeaderLink href="/">Home</HeaderLink>
 			<HeaderLink href="/blog">Blog</HeaderLink>
@@ -45,22 +46,65 @@ import { SITE_TITLE } from '../consts';
 	h2 a,
 	h2 a.active {
 		text-decoration: none;
+		color: rgb(var(--black)); 
 	}
+
+	/* Add hover effect for the site title */
+    h2 a:hover {
+        color: var(--accent);
+    }
+	
 	nav {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 	}
-	nav a {
+
+	/* Create a container for the navigation links with relative positioning */
+	.internal-links {
+		position: relative;
+		display: flex;
+	}
+
+	/* Style the navigation links */
+	.internal-links :global(a) {
 		padding: 1em 0.5em;
 		color: var(--black);
-		border-bottom: 4px solid transparent;
 		text-decoration: none;
+		position: relative;
+		transition: color 0.2s ease;
 	}
-	nav a.active {
-		text-decoration: none;
-		border-bottom-color: var(--accent);
+	
+	/* Hover effect - change color to blue */
+    .internal-links :global(a:hover) {
+        color: var(--accent);
+    }
+
+	/* Active link styling */
+	.internal-links :global(a.active) {
+		color: var(--accent);
 	}
+
+	/* Create the animated underline */
+	.internal-links::after {
+		content: '';
+		position: absolute;
+		bottom: 0;
+		left: var(--underline-left, 0);
+        width: var(--underline-width, 0);
+		height: 4px;
+		background-color: var(--accent);
+		border-radius: 2px;
+		transition: all 0.3s ease;
+		opacity: 0;
+	}
+
+	/* Show and position the underline when there's an active link */
+	.internal-links.has-active::after {
+		opacity: 1;
+	}
+
+	
 	.social-links,
 	.social-links a {
 		display: flex;
@@ -71,3 +115,36 @@ import { SITE_TITLE } from '../consts';
 		}
 	}
 </style>
+
+<script>
+	// This script runs on every page load to position the animated underline
+	function positionActiveUnderline() {
+		const navContainer = document.querySelector('.internal-links') as HTMLElement;
+		const activeLink = navContainer?.querySelector('a.active') as HTMLElement;
+
+		if (navContainer && activeLink) {
+			// Add the class to show the underline
+            navContainer.classList.add('has-active');
+
+			const containerRect = navContainer.getBoundingClientRect();
+			const linkRect = activeLink.getBoundingClientRect();
+
+			// Calculate position relative to the nav container
+			const left = linkRect.left - containerRect.left;
+			const width = linkRect.width;
+
+			// Apply styles to the pseudo-element via CSS custom properties
+			navContainer.style.setProperty('--underline-left', `${left}px`);
+			navContainer.style.setProperty('--underline-width', `${width}px`);
+		} else {
+			// Remove the class if no active link
+            navContainer?.classList.remove('has-active');
+		}
+	}
+
+	// Position the underline when the page loads
+    document.addEventListener('DOMContentLoaded', positionActiveUnderline);
+    
+    // Also reposition on window resize
+    window.addEventListener('resize', positionActiveUnderline);
+</script>
