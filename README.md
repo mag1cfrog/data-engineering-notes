@@ -4,7 +4,7 @@ A collection of Apache Spark performance optimization lessons learned from real-
 
 ## 📖 Read the Blog
 
-Visit the live blog: **[mag1cfrog.github.io/spark-tuning-notes](https://mag1cfrog.github.io/spark-tuning-notes/)**
+Visit the live blog: **[mag1cfrog.github.io/data-engineering-notes](https://mag1cfrog.github.io/data-engineering-notes/)**
 
 ## 🚀 What You'll Learn
 
@@ -42,6 +42,6 @@ Have your own Spark optimization stories? Contributions are welcome! This blog a
 
 ## 🔗 Links
 
-- **Live Blog**: [mag1cfrog.github.io/spark-tuning-notes](https://mag1cfrog.github.io/spark-tuning-notes/)
+- **Live Blog**: [mag1cfrog.github.io/data-engineering-notes](https://mag1cfrog.github.io/data-engineering-notes/)
 - **Astro Documentation**: [docs.astro.build](https://docs.astro.build)
 - **Apache Spark**: [spark.apache.org](https://spark.apache.org)

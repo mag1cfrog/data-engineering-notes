@@ -7,7 +7,7 @@ import customToc from "astro-custom-toc";
 // https://astro.build/config
 export default defineConfig({
 	site: 'https://mag1cfrog.github.io',
-	base: '/spark-tuning-notes/',
+	base: '/data-engineering-notes/',
 	output: 'static',
 	integrations: [
 		customToc(
