@@ -3,6 +3,8 @@ import BaseHead from '../components/BaseHead.astro';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import { SITE_TITLE, SITE_DESCRIPTION } from '../consts';
+
+const base = import.meta.env.BASE_URL;
 ---
 
 <!doctype html>
@@ -15,10 +17,10 @@ import { SITE_TITLE, SITE_DESCRIPTION } from '../consts';
 		<main>
 			<h1>Welcome, I'm Hanbo Wang</h1>
             <p>
-                This is my personal space for sharing notes and reflections on Spark job optimization and data engineering. Here you'll find practical lessons, experiments, and insights from my hands-on work.
+                This is my personal space for sharing notes and reflections on data engineering, Spark optimization, and big data technologies. Here you'll find practical lessons, experiments, and insights from my hands-on work with massive datasets in production environments.
             </p>
             <p>
-                Feel free to browse my <a href="/blog">blog posts</a> for detailed write-ups on Spark tuning, performance troubleshooting, and more.
+                Feel free to browse my <a href={`${base}blog`}>blog posts</a> for detailed write-ups on Spark tuning, performance troubleshooting, and more.
             </p>
 		</main>
 		<Footer />

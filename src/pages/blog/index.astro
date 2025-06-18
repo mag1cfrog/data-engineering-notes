@@ -23,67 +23,80 @@ const base = import.meta.env.BASE_URL;
 				width: 960px;
 			}
 			ul {
-				display: flex;
-				flex-wrap: wrap;
-				gap: 2rem;
 				list-style-type: none;
 				margin: 0;
 				padding: 0;
 			}
-			ul li {
-				width: calc(50% - 1rem);
+			li {
+				display: flex;
+				align-items: center;
+				gap: 1.5rem;
+				padding: 2rem 0;
+				border-bottom: 1px solid rgb(var(--gray-light));
 			}
-			ul li * {
-				text-decoration: none;
-				transition: 0.2s ease;
+			li:last-child {
+				border-bottom: none;
 			}
-			ul li:first-child {
-				width: 100%;
-				margin-bottom: 1rem;
-				text-align: center;
+			.post-image-link {
+				flex-shrink: 0;
 			}
-			ul li:first-child img {
-				width: 100%;
-			}
-			ul li:first-child .title {
-				font-size: 2.369rem;
-			}
-			ul li img {
-				margin-bottom: 0.5rem;
-				border-radius: 12px;
-			}
-			ul li a {
+			.post-image {
+				width: 250px;
+				height: 140px;
+				object-fit: cover;
+				border-radius: 8px;
 				display: block;
+				/* flex-shrink: 0; */
+				transition: 0.2s ease, box-shadow 0.2s ease;
+			}
+			.post-text {
+				display: flex;
+				flex-direction: column;
 			}
 			.title {
-				margin: 0;
+				margin: 0 0 0.5rem 0;
+				font-size: 1.5rem;
 				color: rgb(var(--black));
-				line-height: 1;
+				line-height: 1.2;
+				transition: color 0.2s ease;
+			}
+			.title a {
+				text-decoration: none;
+				color: rgb(var(--black));
+				transition: color 0.2s ease;
 			}
 			.date {
 				margin: 0;
 				color: rgb(var(--gray));
 			}
-			ul li a:hover h4,
-			ul li a:hover .date {
-				color: rgb(var(--accent));
-			}
-			ul a:hover img {
-				box-shadow: var(--box-shadow);
-			}
+
+			/* --- INDEPENDENT HOVER RULES --- */
+
+			/* Hover effect for the title link */
+            .title a:hover {
+                color: var(--accent);
+            }
+			/* Hover effect for the image link */
+            .post-image-link:hover .post-image {
+                box-shadow: var(--box-shadow);
+                transform: scale(1.02);
+            }
+
 			@media (max-width: 720px) {
-				ul {
-					gap: 0.5em;
+				
+				li {
+					flex-direction: column;
+					align-items: flex-start;
+					gap: 1rem;
 				}
-				ul li {
+				.post-image-link,
+				.post-image {
 					width: 100%;
-					text-align: center;
+					height: auto;
+					max-height: 220px;
 				}
-				ul li:first-child {
-					margin-bottom: 0;
-				}
-				ul li:first-child .title {
-					font-size: 1.563em;
+				.title {
+					font-size: 1.25rem;
 				}
 			}
 		</style>
@@ -96,15 +109,26 @@ const base = import.meta.env.BASE_URL;
 					{
 						posts.map((post) => (
 							<li>
-								<a href={`${base}blog/${post.id}/`}>
-									{post.data.heroImage && (
-										<Image width={720} height={360} src={post.data.heroImage} alt="" />
-									)}
-									<h4 class="title">{post.data.title}</h4>
-									<p class="date">
-										<FormattedDate date={post.data.pubDate} />
-									</p>
-								</a>
+								{post.data.heroImage && (
+                                    <a href={`${base}blog/${post.id}/`} class="post-image-link">
+                                        <Image
+                                            class="post-image"
+                                            width={720}
+                                            height={360}
+                                            src={post.data.heroImage}
+                                            alt=""
+                                        />
+                                    </a>
+                                )}
+								<div class="post-text">
+                                    {/* The title is now wrapped in its own link */}
+                                    <h4 class="title">
+                                        <a href={`${base}blog/${post.id}/`}>{post.data.title}</a>
+                                    </h4>
+                                    <p class="date">
+                                        <FormattedDate date={post.data.pubDate} />
+                                    </p>
+                                </div>
 							</li>
 						))
 					}

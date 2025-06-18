@@ -1,20 +1,30 @@
-# Spark Tuning Notes
+# Data Engineering Notes
 
-A collection of Apache Spark performance optimization lessons learned from real-world production workloads.
+A collection of practical insights and lessons learned from real-world data engineering workloads, covering Apache Spark optimization, pipeline architecture, and big data technologies.
 
 ## 📖 Read the Blog
 
-Visit the live blog: **[mag1cfrog.github.io/spark-tuning-notes](https://mag1cfrog.github.io/spark-tuning-notes/)**
+Visit the live blog: **[mag1cfrog.github.io/data-engineering-notes](https://mag1cfrog.github.io/data-engineering-notes/)**
 
-## 🚀 What You'll Learn
+This blog documents practical data engineering techniques gained from working with massive datasets in production environments, including:
 
-This blog documents practical Spark optimization techniques gained from working with massive datasets in production environments, including:
-
+### Apache Spark Optimization
 - **Window Function Performance**: How a simple `ROW_NUMBER()` window function caused 391 GB of disk spilling and 33+ minute execution times
 - **Hash vs Sort Aggregation**: Understanding when Spark falls back to expensive sort-based aggregation and how to avoid it
 - **Memory Management**: Identifying and fixing disk spilling issues that kill performance
 - **Query Profile Analysis**: Reading Databricks query profiles to identify bottlenecks
 - **Alternative Approaches**: Using functions like `max_by()` to replace expensive window operations
+
+### Data Pipeline Engineering
+- Pipeline design patterns and best practices
+- Data quality and monitoring strategies
+- Stream processing architectures
+- Performance optimization techniques
+
+### Big Data Technologies
+- Comparative analysis of data processing frameworks
+- Infrastructure and deployment considerations
+- Scalability patterns and anti-patterns
 
 ## 🎯 Featured Case Study
 
@@ -42,6 +52,6 @@ Have your own Spark optimization stories? Contributions are welcome! This blog a
 
 ## 🔗 Links
 
-- **Live Blog**: [mag1cfrog.github.io/spark-tuning-notes](https://mag1cfrog.github.io/spark-tuning-notes/)
+- **Live Blog**: [mag1cfrog.github.io/data-engineering-notes](https://mag1cfrog.github.io/data-engineering-notes/)
 - **Astro Documentation**: [docs.astro.build](https://docs.astro.build)
 - **Apache Spark**: [spark.apache.org](https://spark.apache.org)

@@ -1,12 +1,13 @@
 ---
 import HeaderLink from './HeaderLink.astro';
 import { SITE_TITLE } from '../consts';
+const base = import.meta.env.BASE_URL;
 ---
 
 <header>
 	<nav>
-		<h2><a href="/">{SITE_TITLE}</a></h2>
-		<div class="internal-links">
+		<h2><a href={`${base}`}>{SITE_TITLE}</a></h2>
+		<div class="internal-links" data-base-url={base}>
 			<HeaderLink href="/">Home</HeaderLink>
 			<HeaderLink href="/blog">Blog</HeaderLink>
 			<HeaderLink href="/about">About</HeaderLink>
@@ -45,22 +46,67 @@ import { SITE_TITLE } from '../consts';
 	h2 a,
 	h2 a.active {
 		text-decoration: none;
+		color: rgb(var(--black)); 
 	}
+
+	/* Add hover effect for the site title */
+    h2 a:hover {
+        color: var(--accent);
+    }
+
 	nav {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 	}
-	nav a {
+
+	/* Create a container for the navigation links with relative positioning */
+	.internal-links {
+		position: relative;
+		display: flex;
+	}
+
+	/* Style the navigation links */
+	.internal-links :global(a) {
 		padding: 1em 0.5em;
 		color: var(--black);
-		border-bottom: 4px solid transparent;
 		text-decoration: none;
+		position: relative;
+		transition: color 0.2s ease;
+		width: 80px;
+		text-align: center;
+		flex-shrink: 0;
 	}
-	nav a.active {
-		text-decoration: none;
-		border-bottom-color: var(--accent);
+	
+	/* Hover effect - change color to blue */
+    .internal-links :global(a:hover) {
+        color: var(--accent);
+    }
+
+	/* Active link styling */
+	.internal-links :global(a.active) {
+		color: var(--accent);
 	}
+
+	/* Create the animated underline */
+	.internal-links::after {
+		content: '';
+		position: absolute;
+		bottom: 0;
+		left: var(--underline-left, 0);;
+        width: var(--underline-width, 80px);
+		height: 4px;
+		background-color: var(--accent);
+		border-radius: 2px;
+		transition: left 0.4s ease, width 0.4s ease;
+		opacity: 1;
+	}
+
+	/* New class to disable the transition on the pseudo-element */
+    .internal-links.no-transition::after {
+        transition: none;
+    }
+
 	.social-links,
 	.social-links a {
 		display: flex;
@@ -71,3 +117,129 @@ import { SITE_TITLE } from '../consts';
 		}
 	}
 </style>
+
+<script>
+    function getSlideInfo(base: string) {
+        const currentPath = window.location.pathname;
+        const referrer = document.referrer;
+
+		// --- LOGGING START ---
+        console.groupCollapsed(`[Underline Animation] Page Load: ${currentPath}`);
+        console.log(`Base URL: "${base}"`);
+        console.log(`Current Path: "${currentPath}"`);
+        console.log(`Referrer URL: "${referrer}"`);
+        // --- LOGGING END ---
+
+        if (!referrer || !referrer.includes(window.location.host)) {
+			console.log("Result: No valid referrer. No animation.");
+            console.groupEnd();
+            return { fromIndex: -1 };
+        }
+
+        const navOrder = ['/', '/blog', '/about'];
+
+        const getIndexFromPath = (path: string, label: string) => {
+            const normalizedBase = base.endsWith('/') ? base : base + '/';
+            let relativePath = path.startsWith(normalizedBase) ? path.substring(normalizedBase.length) : path;
+            
+            // Get the first segment of the path, e.g., "blog" from "blog/post"
+            const firstSegment = relativePath.split('/')[0];
+
+            // Construct a path to match against navOrder
+            const navPathToFind = firstSegment ? '/' + firstSegment : '/';
+            
+            const index = navOrder.indexOf(navPathToFind);
+
+            // --- LOGGING START ---
+            console.log(`[${label}] Path: "${path}" -> Relative: "${relativePath}" -> Segment: "${firstSegment}" -> Nav Path: "${navPathToFind}" -> Index: ${index}`);
+            // --- LOGGING END ---
+            return index;
+        };
+
+        const currentIndex = getIndexFromPath(currentPath, 'Current');
+        const referrerPath = new URL(referrer).pathname;
+        const referrerIndex = getIndexFromPath(referrerPath, 'Referrer');
+
+        if (referrerIndex === -1 || currentIndex === -1 || referrerIndex === currentIndex) {
+            console.log(`Result: Animation condition not met (from: ${referrerIndex}, to: ${currentIndex}). No animation.`);
+            console.groupEnd();
+            return { fromIndex: -1 };
+        }
+        
+		const result = { fromIndex: referrerIndex };
+        console.log("Result: Animate from index", result);
+        console.groupEnd();
+        return result;
+    }
+
+    function positionUnderline() {
+        const navContainer = document.querySelector('.internal-links');
+        if (!navContainer) return;
+
+        const activeLink = navContainer.querySelector('a.active');
+        const base = (navContainer as HTMLElement).dataset.baseUrl;
+
+        if (activeLink && typeof base === 'string') {
+            const allLinks = Array.from(navContainer.querySelectorAll('a'));
+            const containerRect = navContainer.getBoundingClientRect();
+            
+            const finalRect = activeLink.getBoundingClientRect();
+            const finalLeft = finalRect.left - containerRect.left;
+            const finalWidth = finalRect.width;
+
+            const slideInfo = getSlideInfo(base);
+            const underlineContainer = navContainer as HTMLElement;
+
+            if (slideInfo.fromIndex === -1) {
+                underlineContainer.style.setProperty('--underline-left', `${finalLeft}px`);
+                underlineContainer.style.setProperty('--underline-width', `${finalWidth}px`);
+                return;
+            }
+
+            const fromLink = allLinks[slideInfo.fromIndex];
+            if (!fromLink) return;
+            const fromRect = fromLink.getBoundingClientRect();
+            const initialLeft = fromRect.left - containerRect.left;
+            const initialWidth = fromRect.width;
+
+            // --- THE CORRECT FIX ---
+            // 1. Add a class to disable the transition on the ::after pseudo-element
+            underlineContainer.classList.add('no-transition');
+            underlineContainer.style.setProperty('--underline-left', `${initialLeft}px`);
+            underlineContainer.style.setProperty('--underline-width', `${initialWidth}px`);
+
+            // 2. Force the browser to render the initial state.
+            underlineContainer.offsetHeight; 
+
+            // 3. Remove the class to re-enable the transition, then set the final state.
+            underlineContainer.classList.remove('no-transition');
+            underlineContainer.style.setProperty('--underline-left', `${finalLeft}px`);
+            underlineContainer.style.setProperty('--underline-width', `${finalWidth}px`);
+        }
+    }
+
+    function addClickHandlers() {
+        const navLinks = document.querySelectorAll('.internal-links a');
+        navLinks.forEach(link => {
+            link.addEventListener('click', () => {
+                const navContainer = document.querySelector('.internal-links');
+                if (!navContainer) return;
+
+                const containerRect = navContainer.getBoundingClientRect();
+                const linkRect = link.getBoundingClientRect();
+                const left = linkRect.left - containerRect.left;
+                const width = linkRect.width;
+
+                (navContainer as HTMLElement).style.setProperty('--underline-left', `${left}px`);
+                (navContainer as HTMLElement).style.setProperty('--underline-width', `${width}px`);
+            });
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        positionUnderline();
+        addClickHandlers();
+    });
+
+    window.addEventListener('resize', positionUnderline);
+</script>
